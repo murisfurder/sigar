@@ -659,6 +659,26 @@ sigar_net_interface_list_destroy(sigar_t *sigar,
     return SIGAR_OK;
 }
 
+int sigar_net_address_list_create(sigar_net_address_list_t *addrlist)
+{
+    addrlist->number = 0;
+    addrlist->size = SIGAR_NET_ADDRLIST_MAX;
+    addrlist->data = malloc(sizeof(*(addrlist->data)) *
+                            addrlist->size);
+    return SIGAR_OK;
+}
+
+int sigar_net_address_list_grow(sigar_net_address_list_t *addrlist)
+{
+    addrlist->data = realloc(addrlist->data,
+                             sizeof(*(addrlist->data)) *
+                             (addrlist->size + SIGAR_NET_ADDRLIST_MAX));
+    addrlist->size += SIGAR_NET_ADDRLIST_MAX;
+
+    return SIGAR_OK;
+}
+
+
 int sigar_net_connection_list_create(sigar_net_connection_list_t *connlist)
 {
     connlist->number = 0;

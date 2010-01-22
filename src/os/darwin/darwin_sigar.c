@@ -2861,6 +2861,152 @@ int sigar_net_interface_config_get(sigar_t *sigar, const char *name,
     return SIGAR_OK;
 }
 
+int sigar_net_interface_config_get_ex(sigar_t *sigar, const char *name,
+                                      sigar_net_interface_config_ex_t *ifconfig)
+{
+    int sock;
+    int status;
+    ifmsg_iter_t iter;
+    struct if_msghdr *ifm;
+    struct sockaddr_dl *sdl;
+    struct ifreq ifr;
+
+    if (!name) {
+        abort(); /* XXX */
+    }
+
+    if (sigar->ifconf_len == 0) {
+        if ((status = sigar_ifmsg_init(sigar)) != SIGAR_OK) {
+            return status;
+        }
+    }
+
+    SIGAR_ZERO(ifconfig);
+
+    iter.type = IFMSG_ITER_GET;
+    iter.name = name;
+
+    if ((status = sigar_ifmsg_iter(sigar, &iter)) != SIGAR_OK) {
+        return status;
+    }
+
+#if 0
+    if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        return errno;
+    }
+#endif
+
+    ifm = iter.data.ifm;
+
+    SIGAR_SSTRCPY(ifconfig->name, name);
+
+    sdl = (struct sockaddr_dl *)(ifm + 1);
+
+    sigar_net_address_mac_set(ifconfig->hwaddr,
+                              LLADDR(sdl),
+                              sdl->sdl_alen);
+
+    ifconfig->flags = ifm->ifm_flags;
+    ifconfig->mtu = ifm->ifm_data.ifi_mtu;
+    ifconfig->metric = ifm->ifm_data.ifi_metric;
+
+    SIGAR_SSTRCPY(ifr.ifr_name, name);
+
+#define ifr_s_addr(ifr) \
+    ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr
+
+#if 0
+    if (!ioctl(sock, SIOCGIFADDR, &ifr)) {
+        sigar_net_address_set(ifconfig->address,
+                              ifr_s_addr(ifr));
+    }
+
+    if (!ioctl(sock, SIOCGIFNETMASK, &ifr)) {
+        sigar_net_address_set(ifconfig->netmask,
+                              ifr_s_addr(ifr));
+    }
+
+    if (ifconfig->flags & IFF_LOOPBACK) {
+        sigar_net_address_set(ifconfig->destination,
+                              ifconfig->address.addr.in);
+        sigar_net_address_set(ifconfig->broadcast, 0);
+        SIGAR_SSTRCPY(ifconfig->type,
+                      SIGAR_NIC_LOOPBACK);
+    }
+    else {
+        if (!ioctl(sock, SIOCGIFDSTADDR, &ifr)) {
+            sigar_net_address_set(ifconfig->destination,
+                                  ifr_s_addr(ifr));
+        }
+
+        if (!ioctl(sock, SIOCGIFBRDADDR, &ifr)) {
+            sigar_net_address_set(ifconfig->broadcast,
+                                  ifr_s_addr(ifr));
+        }
+        SIGAR_SSTRCPY(ifconfig->type,
+                      SIGAR_NIC_ETHERNET);
+    }
+
+    sigar_net_interface_ipv6_config_init(ifconfig);
+    sigar_net_interface_ipv6_config_get(sigar, name, ifconfig);
+
+    close(sock);
+#else
+    {
+         sigar_net_address_list_t *addrlist;
+         struct ifaddrs *ifaddrs, *ifa;
+
+         if (getifaddrs(&ifaddrs) == -1) {
+             /* XXX make sure iter doesn't leak */
+             return errno;
+         }
+
+         addrlist = &ifconfig->addrs;
+         sigar_net_address_list_create(addrlist);
+
+         for (ifa = ifaddrs; ifa; ifa = ifa->ifa_next) {
+             sigar_net_address_set_t *set;
+             struct sockaddr *sa = ifa->ifa_addr;
+
+             if (!strEQ(ifa->ifa_name, ifconfig->name) ||
+                 (ifa->ifa_addr->sa_family != AF_INET &&
+                  ifa->ifa_addr->sa_family != AF_INET6)) {
+                 continue;
+             }
+
+             set = &addlist->data[addrlist->number++];
+             SIGAR_NET_ADDRLIST_GROW(addrlist);
+
+             if (sa->sa_family == AF_INET) {
+                 sigar_net_address_set(set->address, SIGAR_SIN_ADDR(sa));
+                 sigar_net_address_set(set->netmask, SIGAR_SIN_ADDR(ifa->ifa_netmask));
+                 /* XXX prefix length */
+                 if (ifa->ifa_broadaddr) {
+                     sigar_net_address_set(set->address,
+                                           SIGAR_SIN_ADDR(ifa->ifa_broadaddr));
+                 }
+             } else {
+                 sigar_net_address6_set(set->address, SIGAR_SIN6_ADDR(sa));
+                 sigar_net_address6_set(set->netmask, SIGAR_SIN6_ADDR(ifa->ifa_netmask));
+                 set->prefix_length = sigar_in6_prefixlen(ifa->ifa_netmask);
+                 if (ifa->ifa_dstaddr) {
+                     sigar_net_address6_set(set->destination,
+                                            SIGAR_SIN6_ADDR(ifa->ifa_dstaddr));
+                 }
+                 sigar_net_interface_scope6_set(set, SIGAR_SIN6_ADDR(sa));
+             }
+         }
+
+         freeifaddrs(ifaddrs);
+    }
+#endif
+
+    /* XXX can we get a better description like win32? */
+    SIGAR_SSTRCPY(ifconfig->description,
+                  ifconfig->name);
+
+    return SIGAR_OK;
+}
 int sigar_net_interface_stat_get(sigar_t *sigar, const char *name,
                                  sigar_net_interface_stat_t *ifstat)
 {
