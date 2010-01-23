@@ -2906,6 +2906,17 @@ int sigar_net_interface_config_get_ex(sigar_t *sigar, const char *name,
     ifconfig->mtu = ifm->ifm_data.ifi_mtu;
     ifconfig->metric = ifm->ifm_data.ifi_metric;
 
+    if (ifconfig->flags & IFF_LOOPBACK) {
+        SIGAR_SSTRCPY(ifconfig->type, SIGAR_NIC_LOOPBACK);
+    } else {
+        /*
+         * XXX Firewire, token ring/FDDI, etc.? 
+         * Could examine ifm->ifm_data->ifi_type; see if_types.h / IANA
+         * smi-numbers.
+         */
+        SIGAR_SSTRCPY(ifconfig->type, SIGAR_NIC_ETHERNET);
+    }
+
     if (getifaddrs(&ifaddrs) == -1) {
         /* XXX make sure iter doesn't leak */
         return errno;
