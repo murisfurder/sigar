@@ -2012,6 +2012,62 @@ sigar_net_interface_config_primary_get(sigar_t *sigar,
     }
 }
 
+SIGAR_DECLARE(int)
+sigar_net_interface_config_primary_get_ex(sigar_t *sigar,
+                                          sigar_net_interface_config_ex_t *ifconfig)
+{
+    int i, status, found=0;
+    sigar_net_interface_list_t iflist;
+    sigar_net_interface_config_t possible_config;
+
+    possible_config.flags = 0;
+
+    if ((status = sigar_net_interface_list_get(sigar, &iflist)) != SIGAR_OK) {
+        return status;
+    }
+
+    for (i=0; i<iflist.number; i++) {
+        status = sigar_net_interface_config_get_ex(sigar,
+                                                   iflist.data[i], ifconfig);
+
+        if ((status != SIGAR_OK) ||
+            (ifconfig->flags & SIGAR_IFF_LOOPBACK) ||
+            !ifconfig->hwaddr.addr.in)   /* no mac address */
+        {
+            continue;
+        }
+
+        if (!possible_config.flags) {
+            /* save for later for use if we're not connected to the net
+             * or all interfaces are aliases (e.g. solaris zone)
+             */
+            memcpy(&possible_config, ifconfig, sizeof(*ifconfig));
+        }
+        if (!ifconfig->addrs.number) {
+            continue; /* no ip address */
+        }
+        if (strchr(iflist.data[i], ':')) {
+            continue; /* alias */
+        }
+
+        found = 1;
+        break;
+    }
+
+    sigar_net_interface_list_destroy(sigar, &iflist);
+
+    if (found) {
+        return SIGAR_OK;
+    }
+    else if (possible_config.flags) {
+        memcpy(ifconfig, &possible_config, sizeof(*ifconfig));
+        return SIGAR_OK;
+    }
+    else {
+        return SIGAR_ENXIO;
+    }
+}
+
 static int fqdn_ip_get(sigar_t *sigar, char *name)
 {
     sigar_net_interface_config_t ifconfig;

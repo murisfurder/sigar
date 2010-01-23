@@ -2872,9 +2872,8 @@ int sigar_net_interface_config_get_ex(sigar_t *sigar, const char *name,
     sigar_net_address_list_t *addrlist;
     struct ifaddrs *ifaddrs, *ifa;
 
-
     if (!name) {
-        abort(); /* XXX */
+        return sigar_net_interface_config_primary_get_ex(sigar, ifconfig);
     }
 
     if (sigar->ifconf_len == 0) {
