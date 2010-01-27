@@ -630,6 +630,51 @@ sigar_net_interface_config_primary_get(sigar_t *sigar,
                                        sigar_net_interface_config_t *ifconfig);
 
 typedef struct {
+    /* supports ipv4 and ipv6 */
+    sigar_net_address_t address; 
+    /* two sides of the same coin */
+    sigar_net_address_t broadcast;
+    /*
+     * It's 2010.  Assume CIDR is in effect, implying that (sub)netmask and
+     * prefix_length are just two representations of the same thing.
+     */
+    sigar_net_address_t netmask;
+    int prefix_length;
+    int scope6;
+} sigar_net_address_set_t;
+
+typedef struct {
+   unsigned long number;
+   unsigned long size;
+   sigar_net_address_set_t *data;
+} sigar_net_address_list_t;
+
+typedef struct {
+    char name[16];
+    char type[64];
+    char description[256];
+    sigar_net_address_t hwaddr;
+    sigar_net_address_list_t addrs;
+    sigar_uint64_t
+        flags,
+        mtu,
+        metric;
+    int tx_queue_len;
+} sigar_net_interface_config_ex_t;
+
+SIGAR_DECLARE(int)
+sigar_net_interface_config_get_ex(sigar_t *sigar,
+                                  const char *name,
+                                  sigar_net_interface_config_ex_t *ifconfig);
+
+/* XXX need a destroy() for list memory */
+/* XXX malloc not checked in list create, grow functions */
+
+SIGAR_DECLARE(int)
+sigar_net_interface_config_primary_get(sigar_t *sigar,
+                                       sigar_net_interface_config_t *ifconfig);
+
+typedef struct {
     sigar_uint64_t
         /* received */
         rx_packets,

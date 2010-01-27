@@ -166,6 +166,8 @@
 
 #define SIGAR_NET_IFLIST_MAX 20
 
+#define SIGAR_NET_ADDRLIST_MAX 20
+
 #define SIGAR_NET_CONNLIST_MAX 20
 
 #define SIGAR_ARP_LIST_MAX 12
@@ -266,6 +268,15 @@ int sigar_net_interface_list_grow(sigar_net_interface_list_t *iflist);
         sigar_net_interface_list_grow(iflist); \
     }
 
+int sigar_net_address_list_create(sigar_net_address_list_t *addrlist);
+
+int sigar_net_address_list_grow(sigar_net_address_list_t *addrlist);
+
+#define SIGAR_NET_ADDRLIST_GROW(addrlist) \
+    if (addrlist->number >= addrlist->size) { \
+        sigar_net_address_list_grow(addrlist); \
+    }
+
 int sigar_net_connection_list_create(sigar_net_connection_list_t *connlist);
 
 int sigar_net_connection_list_grow(sigar_net_connection_list_t *connlist);
@@ -274,6 +285,10 @@ int sigar_net_connection_list_grow(sigar_net_connection_list_t *connlist);
     if (connlist->number >= connlist->size) { \
         sigar_net_connection_list_grow(connlist); \
     }
+
+#define SIGAR_SIN(s) ((struct sockaddr_in *)(s))
+
+#define SIGAR_SIN_ADDR(s) &(SIGAR_SIN(s)->sin_addr)
 
 #define sigar_net_address_set(a, val) \
     (a).addr.in = val; \

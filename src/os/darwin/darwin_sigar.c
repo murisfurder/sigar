@@ -2862,6 +2862,102 @@ int sigar_net_interface_config_get(sigar_t *sigar, const char *name,
     return SIGAR_OK;
 }
 
+int sigar_net_interface_config_get_ex(sigar_t *sigar, const char *name,
+                                      sigar_net_interface_config_ex_t *ifconfig)
+{
+    int status;
+    ifmsg_iter_t iter;
+    struct if_msghdr *ifm;
+    struct sockaddr_dl *sdl;
+    sigar_net_address_list_t *addrlist;
+    struct ifaddrs *ifaddrs, *ifa;
+
+
+    if (!name) {
+        abort(); /* XXX */
+    }
+
+    if (sigar->ifconf_len == 0) {
+        if ((status = sigar_ifmsg_init(sigar)) != SIGAR_OK) {
+            return status;
+        }
+    }
+
+    SIGAR_ZERO(ifconfig);
+
+    iter.type = IFMSG_ITER_GET;
+    iter.name = name;
+
+    if ((status = sigar_ifmsg_iter(sigar, &iter)) != SIGAR_OK) {
+        return status;
+    }
+
+    ifm = iter.data.ifm;
+
+    SIGAR_SSTRCPY(ifconfig->name, name);
+
+    sdl = (struct sockaddr_dl *)(ifm + 1);
+
+    sigar_net_address_mac_set(ifconfig->hwaddr,
+                              LLADDR(sdl),
+                              sdl->sdl_alen);
+
+    ifconfig->flags = ifm->ifm_flags;
+    ifconfig->mtu = ifm->ifm_data.ifi_mtu;
+    ifconfig->metric = ifm->ifm_data.ifi_metric;
+
+    if (getifaddrs(&ifaddrs) == -1) {
+        /* XXX make sure iter doesn't leak */
+        return errno;
+    }
+
+    addrlist = &ifconfig->addrs;
+    sigar_net_address_list_create(addrlist);
+
+    for (ifa = ifaddrs; ifa; ifa = ifa->ifa_next) {
+        sigar_net_address_set_t *set;
+        struct sockaddr *sa = ifa->ifa_addr;
+
+        if (!strEQ(ifa->ifa_name, ifconfig->name) ||
+            (ifa->ifa_addr->sa_family != AF_INET &&
+             ifa->ifa_addr->sa_family != AF_INET6)) {
+            continue;
+        }
+
+        set = &addrlist->data[addrlist->number++];
+        SIGAR_NET_ADDRLIST_GROW(addrlist);
+
+        if (sa->sa_family == AF_INET) {
+            sigar_net_address_set(set->address,
+                                  (SIGAR_SIN_ADDR(sa))->s_addr);
+            sigar_net_address_set(set->netmask,
+                                  (SIGAR_SIN_ADDR(ifa->ifa_netmask))->s_addr);
+            /* XXX prefix length */
+            if (ifa->ifa_broadaddr) {
+                sigar_net_address_set(set->broadcast,
+                                      (SIGAR_SIN_ADDR(ifa->ifa_broadaddr))->s_addr);
+            }
+        } else {
+            sigar_net_address6_set(set->address, SIGAR_SIN6_ADDR(sa));
+            sigar_net_address6_set(set->netmask, SIGAR_SIN6_ADDR(ifa->ifa_netmask));
+            set->prefix_length = sigar_in6_prefixlen(ifa->ifa_netmask);
+            if (ifa->ifa_broadaddr) {
+                sigar_net_address6_set(set->broadcast,
+                                       SIGAR_SIN6_ADDR(ifa->ifa_broadaddr));
+            }
+            sigar_net_interface_scope6_set(set, SIGAR_SIN6_ADDR(sa));
+        }
+    }
+
+    freeifaddrs(ifaddrs);
+
+    /* XXX can we get a better description like win32? */
+    SIGAR_SSTRCPY(ifconfig->description,
+                  ifconfig->name);
+
+    return SIGAR_OK;
+}
+
 int sigar_net_interface_stat_get(sigar_t *sigar, const char *name,
                                  sigar_net_interface_stat_t *ifstat)
 {
